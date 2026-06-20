@@ -1,0 +1,38 @@
+{
+  "$schema": "https://swc.rs/schema.json",
+  "sourceMaps": true,
+  "jsc": {
+    "target": "es2023",
+    "parser": {
+      "syntax": "typescript",
+      "decorators": true,
+      "dynamicImport": true
+    },
+    "transform": {
+      "legacyDecorator": true,
+      "decoratorMetadata": true,
+      "useDefineForClassFields": false
+    },
+    "keepClassNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@env": ["env"],
+      "@env/*": ["env/*"],
+      "@app/config": ["libs/config"],
+      "@app/config/*": ["libs/config/*"],
+      "@app/common": ["libs/common"],
+      "@app/common/*": ["libs/common/*"],
+      "@app/auth": ["libs/auth"],
+      "@app/auth/*": ["libs/auth/*"],
+      "@app/database": ["libs/database"],
+      "@app/database/*": ["libs/database/*"],
+      "@app/logging": ["libs/logging"],
+      "@app/logging/*": ["libs/logging/*"],
+      "@app/observability": ["libs/observability"],
+      "@app/observability/*": ["libs/observability/*"]
+    }
+  },
+  "module": {
+    "type": "commonjs"
+  }
+}

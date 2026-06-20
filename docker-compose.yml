@@ -1,0 +1,43 @@
+# Local infrastructure — optimized for OrbStack (macOS/Linux).
+#
+# OrbStack runs Linux containers with near-native performance and fast amd64
+# emulation via Rosetta, so the amd64-only SQL Server image starts quickly with
+# no Docker Desktop overhead. No custom networks/tuning are required — OrbStack's
+# default bridge is sufficient and low-latency.
+#
+#   pnpm docker:up     # start    (docker compose up -d)
+#   pnpm docker:down   # stop     (docker compose down)
+#
+# Reach the DB from the host at localhost:1433, or from other containers at
+# `mssql:1433`. With OrbStack you can also use the domain `mssql.orb.local`.
+
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    # SQL Server ships amd64-only; OrbStack emulates it efficiently on Apple Silicon.
+    platform: linux/amd64
+    container_name: ${COMPOSE_PROJECT_NAME:-app}-mssql
+    environment:
+      ACCEPT_EULA: 'Y'
+      # Keep in sync with DATABASE_URL in .env.
+      MSSQL_SA_PASSWORD: 'Your_password123'
+      MSSQL_PID: 'Developer'
+    ports:
+      - '1433:1433'
+    volumes:
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      # `sqlcmd` lives here in the 2022 image; -C trusts the self-signed cert.
+      test:
+        [
+          'CMD-SHELL',
+          '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" || exit 1',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  mssql-data:

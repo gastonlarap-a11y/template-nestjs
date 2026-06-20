@@ -1,0 +1,33 @@
+// Prisma schema — SQL Server (default).
+//
+// Prisma 7 notes:
+//  - The Rust query engine is gone; the Client is pure TypeScript and talks to
+//    the database through a **driver adapter** (`@prisma/adapter-mssql` +
+//    `mssql`). See `libs/database/prisma.service.ts`.
+//  - `DATABASE_URL` (JDBC-style for SQL Server) is still used by the Prisma CLI
+//    for migrations.
+//
+// Regenerate the client after edits:  pnpm prisma:generate
+// Create/apply a migration:          pnpm prisma:migrate
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+}
+
+/// Application user. Demonstrates the Clean-Architecture "Users" vertical slice.
+model User {
+  id        String   @id @default(uuid()) @db.UniqueIdentifier
+  email     String   @unique @db.NVarChar(320)
+  name      String   @db.NVarChar(200)
+  /// Comma-free JSON array of role names, persisted as text for portability.
+  roles     String   @default("[]") @db.NVarChar(Max)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}

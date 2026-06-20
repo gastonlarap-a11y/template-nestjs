@@ -1,0 +1,45 @@
+# Cursor Rules — NestJS Clean Architecture Template
+
+You are working in an enterprise NestJS 11 + Fastify + Prisma 7 + Zod microservice
+that follows Clean Architecture. Enforce the boundaries below in every change.
+See ARCHITECTURE.md and CLAUDE.md for full context.
+
+## Architecture boundaries (must enforce)
+
+- Clean Architecture with vertical slices under `src/modules/<feature>/`:
+  - `domain/`        — pure TypeScript: entities + ports (abstract classes). NO
+                       framework imports (no NestJS, Prisma, Fastify).
+  - `application/`   — use-cases + Zod DTOs. Depends ONLY on domain ports.
+  - `infrastructure/`— adapters implementing ports (e.g. Prisma repositories).
+  - `*.controller.ts`— HTTP transport only; delegates to use-cases.
+- Dependency direction is inward only, and `src → libs` only (never `libs → src`).
+- Shared building blocks live in `libs/*` and are imported via the `@app/*` alias.
+  The environment schema is imported via `@env/env.schema`. No deep relative
+  imports across libs.
+
+## Hard requirements
+
+- HTTP: Fastify only (`@nestjs/platform-fastify`). Never add Express APIs,
+  Express-only middleware, or `@nestjs/platform-express`.
+- Validation: Zod v4 via `createZodDto` (`nestjs-zod`) for ALL DTOs; the global
+  `ZodValidationPipe` validates them. Never introduce `class-validator`/`class-transformer`.
+- Config/env: no root `.env`. Files live in `env/.env.<APP_ENV>` (local|dev|qa|prod,
+  default local). Add new variables to `env/env.schema.ts` AND `env/.env.example`.
+  Read config only through the typed `AppConfigService`; never `process.env` in app code.
+- Errors: RFC 7807 Problem Details, produced centrally by
+  `libs/common/filters/all-exceptions.filter.ts` (`application/problem+json` with
+  `type/title/status/detail/instance` + `code`/`errors`/`correlationId`/`timestamp`).
+  Throw `DomainException` subclasses; never hand-build error response bodies.
+- Success responses: the global `TransformInterceptor` wraps everything as
+  `{ data, meta }`. Paginated results return `{ items, meta }` and are hoisted.
+  Opt out only with `@SkipResponseEnvelope()`.
+- Auth: dual-strategy JWT chosen at boot via `USE_LOCAL_MOCK_AUTH` (Azure AD JWKS
+  RS256 vs local HS256). Guards are global; use `@Public()` / `@Roles()` per route.
+
+## Conventions
+
+- Naming: `*.entity.ts`, `*.repository.ts` (port) / `<tech>-*.repository.ts`
+  (adapter), `*.use-case.ts`, `*.dto.ts`, `*.controller.ts`, `*.guard.ts`.
+- TypeScript strict mode is mandatory — do not loosen `tsconfig.json`.
+- Co-locate `*.spec.ts` unit tests; e2e tests live in `test/`.
+- After changes, ensure `pnpm typecheck` and `pnpm test` pass.

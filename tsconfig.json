@@ -1,0 +1,64 @@
+{
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "resolvePackageJsonExports": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2023",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // --- Strict mode (2026 baseline) -------------------------------------
+    // Full strictness is enabled. Do not loosen these without a strong reason;
+    // they catch the majority of runtime bugs at compile time.
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictBindCallApply": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+
+    // --- Path aliases ----------------------------------------------------
+    // Shared, framework-agnostic building blocks live in `libs/` and are
+    // imported via the `@app/*` alias to keep a clean dependency direction
+    // (app -> libs, never the reverse).
+    "paths": {
+      "@env": ["env"],
+      "@env/*": ["env/*"],
+      "@app/config": ["libs/config"],
+      "@app/config/*": ["libs/config/*"],
+      "@app/common": ["libs/common"],
+      "@app/common/*": ["libs/common/*"],
+      "@app/auth": ["libs/auth"],
+      "@app/auth/*": ["libs/auth/*"],
+      "@app/database": ["libs/database"],
+      "@app/database/*": ["libs/database/*"],
+      "@app/logging": ["libs/logging"],
+      "@app/logging/*": ["libs/logging/*"],
+      "@app/observability": ["libs/observability"],
+      "@app/observability/*": ["libs/observability/*"]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "libs/**/*",
+    "env/**/*",
+    "scripts/**/*",
+    "test/**/*",
+    "prisma/**/*",
+    "prisma.config.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}
