@@ -10,7 +10,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "init": "tsx scripts/init.ts",
+    "init": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/init.ts",
     "build": "nest build && tsc-alias -p tsconfig.build.json",
     "format": "prettier --write \"src/**/*.ts\" \"libs/**/*.ts\" \"test/**/*.ts\"",
     "start": "node -r @swc-node/register src/main.ts",

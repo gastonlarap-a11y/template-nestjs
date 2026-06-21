@@ -80,9 +80,10 @@ when touching bootstrap, guards, filters, or interceptors.
    (`JwtAuthGuard`, `RolesGuard`) are global; use `@Public()` and `@Roles()` to
    adjust per route. See ARCHITECTURE.md.
 
-   ### MCP & Documentation Policy
+### MCP & Documentation Policy
 - **Mandatory Tooling:** ALWAYS use the `context7` MCP server tools (`resolve-library-id` and `query-docs`) BEFORE generating implementation code for any third-party library, especially for Fastify, Prisma 7, Zod, and Azure SDKs.
 - Do not rely on your base training data for API surfaces. Fetch the latest documentation snippet via Context7 to ensure 2026 compatibility.
+- You are authorized to run `git status`, `git diff`, and `git add`. You MUST NEVER run `git commit` or `git push` autonomously. When a task is complete, stage the modified files and instruct the user to execute the commit manually to preserve cryptographic signatures.
 
 ## Conventions
 
