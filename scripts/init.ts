@@ -76,10 +76,12 @@ async function ask(): Promise<Answers> {
       message: 'Project name?',
       placeholder: 'my-service',
       defaultValue: 'my-service',
-      validate: (v) =>
-        /^[a-z0-9-]+$/.test(v) || v === ''
+      validate: (v) => {
+        const value = v ?? '';
+        return /^[a-z0-9-]+$/.test(value) || value === ''
           ? undefined
-          : 'Use lowercase letters, numbers and dashes only.',
+          : 'Use lowercase letters, numbers and dashes only.';
+      },
     }),
   );
 
