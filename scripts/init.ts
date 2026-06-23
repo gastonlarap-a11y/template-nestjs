@@ -343,8 +343,31 @@ async function run(): Promise<void> {
   await updateDependencies(answers);
   s.stop('Dependencies updated');
 
-  // The init script has done its job — remove it so it can't run twice.
+  // ---- Self-cleanup: the initializer removes its own footprint. -----------
+
+  // Optionally start a brand-new git history (default off — opt-in only).
+  const freshGit = ensureContinue(
+    await confirm({
+      message: 'Start a fresh git history (delete .git and re-init)?',
+      initialValue: false,
+    }),
+  );
+  if (freshGit) {
+    await remove('.git');
+    await execa('git', ['init'], { stdio: 'inherit' });
+  }
+
+  // The init script has done its job — remove its source so it can't run twice,
+  // drop its npm script, then uninstall its now-unused dev dependencies. The
+  // `pnpm remove` runs last: `execa`/`@clack/prompts` stay on disk (and already
+  // loaded in memory) until everything that needs them has finished.
   await remove('scripts/init.ts');
+  await edit('package.json', (c) =>
+    c.replace(/[ \t]*"init":\s*"[^"]*scripts\/init\.ts",\r?\n/, ''),
+  );
+  await execa('pnpm', ['remove', '@clack/prompts', 'execa'], {
+    stdio: 'inherit',
+  });
 
   const next = [
     answers.includePrisma

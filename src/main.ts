@@ -25,7 +25,13 @@ async function bootstrap(): Promise<void> {
     AppModule,
     // `trustProxy` so client IPs / protocol are correct behind Azure's reverse
     // proxy. `bufferLogs` holds early logs until the pino logger is attached.
-    new FastifyAdapter({ trustProxy: true }),
+    new FastifyAdapter({
+      trustProxy: true,
+      // Cap request bodies at 1 MiB to blunt oversized-payload abuse.
+      bodyLimit: 1_048_576,
+      // Let nestjs-pino own request/response logging (no duplicate Fastify logs).
+      disableRequestLogging: true,
+    }),
     { bufferLogs: true },
   );
 
