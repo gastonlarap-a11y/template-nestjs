@@ -7,7 +7,7 @@ import {
 } from '@nestjs/terminus';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
-import { Public, SkipResponseEnvelope } from '@app/common';
+import { Public } from '@app/common';
 import { PrismaService } from '@app/database';
 
 /**
@@ -23,7 +23,6 @@ import { PrismaService } from '@app/database';
  */
 @ApiTags('Health')
 @Controller('health')
-@SkipResponseEnvelope()
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
