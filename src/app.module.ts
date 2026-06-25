@@ -9,13 +9,13 @@ import { PrismaModule } from '@app/database';
 import { AppLoggingModule } from '@app/logging';
 import { ObservabilityModule } from '@app/observability';
 
-import { UsersModule } from './modules/users/users.module';
+import { UsuariosModule } from './features/usuarios/usuarios.module';
 
 /**
  * Application composition root.
  *
  * Global, cross-cutting modules (config, logging, database, auth, common,
- * observability) are wired once here; feature modules (e.g. {@link UsersModule})
+ * observability) are wired once here; feature modules (e.g. {@link UsuariosModule})
  * plug in alongside them. The global {@link ZodValidationPipe} makes every
  * `createZodDto` body/query/param self-validating.
  */
@@ -30,7 +30,7 @@ import { UsersModule } from './modules/users/users.module';
     ObservabilityModule,
 
     // Feature modules.
-    UsersModule,
+    UsuariosModule,
   ],
   providers: [
     // Validate & coerce every Zod DTO across the app.

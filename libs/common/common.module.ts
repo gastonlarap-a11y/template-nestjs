@@ -6,26 +6,20 @@ import {
   DEFAULT_REQUEST_TIMEOUT_MS,
   TimeoutInterceptor,
 } from './interceptors/timeout.interceptor';
-import { TransformInterceptor } from './interceptors/transform.interceptor';
 
 /**
  * Cross-cutting concerns wired application-wide:
- *  - {@link AllExceptionsFilter}: RFC 7807 Problem Details for every error.
- *  - {@link TransformInterceptor}: standard `{ data, meta }` success envelope.
- *  - {@link TimeoutInterceptor}: fail-fast on slow requests.
+ *  - {@link AllExceptionsFilter}: uniform `ApiEnvelope` shape for every error.
+ *  - {@link TimeoutInterceptor}: fail-fast on slow requests (15 s default).
  *
- * The `ZodValidationPipe` is registered in `AppModule` (it must be the global
- * pipe so every Zod DTO is validated).
+ * The `ZodValidationPipe` is registered in `AppModule` (must be the global pipe
+ * so every Zod DTO is validated). Feature handlers own the success envelope
+ * by returning `ApiEnvelope<T>` directly — no global transform interceptor.
  */
 @Module({
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
-    // Wraps every successful response in the standard envelope (injects Reflector
-    // to honour @SkipResponseEnvelope()).
-    { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
     {
-      // Factory (not useClass): the interceptor takes a primitive `number` the
-      // DI container can't resolve on its own.
       provide: APP_INTERCEPTOR,
       useFactory: () => new TimeoutInterceptor(DEFAULT_REQUEST_TIMEOUT_MS),
     },

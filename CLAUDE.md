@@ -7,10 +7,10 @@ this before writing code.** For deeper rationale see [ARCHITECTURE.md](./ARCHITE
 
 Enterprise-grade, cloud-native (Azure-ready) **NestJS 11 microservice template**
 built on **Fastify**, **Prisma 7** (pure-TS client, SQL Server driver adapter),
-**Zod v4**, and **nestjs-pino**. It follows **Clean Architecture** with vertical
-feature slices and a strict dependency direction.
+**Zod v4**, and **nestjs-pino**. It follows **Vertical Slice Architecture (VSA)**:
+cada operación del dominio es un slice autónomo con localidad de referencia total.
 
-- Feature code: `src/modules/<feature>/` (domain → application → infrastructure → presentation).
+- Feature slices: `src/features/<dominio>/<accion>/` — endpoint, lógica, DTOs y tests juntos.
 - Shared building blocks: `libs/*`, imported via the `@app/*` path alias.
 - Environment schema + per-stage files: `env/`, imported via the `@env` alias.
 - Package manager: **pnpm** (Node ≥ 22).
@@ -36,25 +36,29 @@ when touching bootstrap, guards, filters, or interceptors.
 
 ## Non-negotiable architectural rules
 
-1. **Clean Architecture dependency direction — never violate it.**
-   - `domain/` is pure TypeScript: entities + ports (abstract classes as DI
-     tokens). **No** NestJS, Prisma, Fastify, or other framework imports.
-   - `application/` (use-cases, DTOs) depends only on `domain` ports — never on a
-     concrete adapter.
-   - `infrastructure/` implements ports (e.g. `prisma-user.repository.ts`).
-   - presentation (`*.controller.ts`) handles HTTP only; it delegates to use-cases.
-   - Dependency flow is **`src → libs`, never `libs → src`**, and within a module
-     domain → application → infrastructure/presentation (inward only).
+1. **Vertical Slice Architecture — estructura por acción, no por capa.**
+   - Cada operación CRUD vive en `src/features/<dominio>/<accion>/`.
+   - Dentro de la subcarpeta del slice van: el handler (`*.handler.ts`), los Zod
+     DTOs (`*.dto.ts`) y la spec (`*.spec.ts`). Todo junto, sin subdirectorios.
+   - No se usan capas `domain/`, `application/`, `infrastructure/` dentro de features.
+   - Dependency flow is **`src → libs`, never `libs → src`**.
 
-2. **Fastify, not Express.** The app uses `@nestjs/platform-fastify`
+2. **Inyección directa de Prisma.** `PrismaService` se inyecta directamente en
+   el constructor del handler. No se crean repositorios ni interfaces abstractas
+   entre el handler y la base de datos.
+
+3. **Excepciones nativas de NestJS.** Lanza `NotFoundException`, `ConflictException`,
+   etc., directamente desde el handler. No uses subclases `DomainException`.
+
+4. **Fastify, not Express.** The app uses `@nestjs/platform-fastify`
    (`NestFastifyApplication`, `FastifyAdapter`). Do not add Express-only
    middleware/APIs or `@nestjs/platform-express`.
 
-3. **Zod for all validation.** Every DTO is a Zod schema via `createZodDto`
+5. **Zod for all validation.** Every DTO is a Zod schema via `createZodDto`
    (`nestjs-zod`); the global `ZodValidationPipe` validates them. Environment is
    validated by `env/env.schema.ts`. Do not introduce `class-validator`.
 
-4. **Environment via `env/` + `APP_ENV`.** No `.env` at the repo root. The active
+6. **Environment via `env/` + `APP_ENV`.** No `.env` at the repo root. The active
    file is `env/.env.<APP_ENV>` (`APP_ENV` ∈ `local|dev|qa|prod`, default
    `local`), selected in `libs/config/config.module.ts`. `NODE_ENV` keeps its
    standard meaning (`development|production|test`) for tooling. Add new vars to
@@ -62,20 +66,13 @@ when touching bootstrap, guards, filters, or interceptors.
    committed. Access config through the typed `AppConfigService` — never read
    `process.env` directly in app code.
 
-5. **Errors: RFC 7807 Problem Details.** All errors flow through
-   `libs/common/filters/all-exceptions.filter.ts`, which emits
-   `application/problem+json` with `type/title/status/detail/instance` (+ `code`,
-   `errors`, `correlationId`, `timestamp`). Throw `DomainException` subclasses
-   (`EntityNotFoundException`, `EntityConflictException`, `BusinessRuleException`)
-   from domain/application code — do not hand-format error responses.
+7. **Envelope uniforme obligatorio** (`ApiEnvelope<T>` de `@app/common`).
+   - Éxito: el handler retorna `ApiEnvelope<T>` directamente con `success: true`.
+   - Error: el `AllExceptionsFilter` (global) produce el mismo shape con `success: false`.
+   - Shape: `{ success, data, message, meta: { timestamp }, errors? }`.
+   - No uses `TransformInterceptor` ni `@SkipResponseEnvelope()` — fueron eliminados.
 
-6. **Success responses: `{ data, meta }` envelope.** The global
-   `TransformInterceptor` wraps every successful response. Paginated use-cases
-   return `{ items, meta }` (via `buildPaginationMeta`) and are hoisted to
-   `{ data: items, meta }`. Opt a route out only with `@SkipResponseEnvelope()`
-   (used by health probes).
-
-7. **Auth is dual-strategy, chosen at boot** by `USE_LOCAL_MOCK_AUTH`: Azure AD
+8. **Auth is dual-strategy, chosen at boot** by `USE_LOCAL_MOCK_AUTH`: Azure AD
    JWKS (RS256) in shared/prod, or a local HS256 mock secret for dev/CI. Guards
    (`JwtAuthGuard`, `RolesGuard`) are global; use `@Public()` and `@Roles()` to
    adjust per route. See ARCHITECTURE.md.
@@ -87,9 +84,9 @@ when touching bootstrap, guards, filters, or interceptors.
 
 ## Conventions
 
-- Files: `*.entity.ts`, `*.repository.ts` (port) / `<tech>-*.repository.ts`
-  (adapter), `*.use-case.ts`, `*.controller.ts`, `*.dto.ts`, `*.guard.ts`.
+- Files per slice: `<accion>.handler.ts`, `<accion>.dto.ts`, `<accion>.spec.ts`.
 - Each `libs/*` exposes a curated barrel `index.ts`; import via `@app/<lib>`, not
   deep paths. The env schema is imported via `@env/env.schema`.
 - TypeScript is fully strict — do not loosen `tsconfig.json` compiler options.
-- Co-locate unit tests as `*.spec.ts` next to the code; e2e tests in `test/`.
+- Co-locate unit tests as `*.spec.ts` inside the slice folder; e2e tests in `test/`.
+- Para paginación reutiliza `PaginationQuerySchema` y `buildPaginationMeta` de `@app/common`.
