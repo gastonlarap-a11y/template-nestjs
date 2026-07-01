@@ -13,7 +13,7 @@
 
 services:
   mssql:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/mssql/server:2025-latest
     # SQL Server ships amd64-only; OrbStack emulates it efficiently on Apple Silicon.
     platform: linux/amd64
     container_name: ${COMPOSE_PROJECT_NAME:-app}-mssql
@@ -27,7 +27,8 @@ services:
     volumes:
       - mssql-data:/var/opt/mssql
     healthcheck:
-      # `sqlcmd` lives here in the 2022 image; -C trusts the self-signed cert.
+      # `sqlcmd` lives here (mssql-tools18 layout, unchanged since 2022 CU14
+      # through the 2025 image); -C trusts the self-signed cert.
       test:
         [
           'CMD-SHELL',

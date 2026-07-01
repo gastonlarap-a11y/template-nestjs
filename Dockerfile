@@ -7,7 +7,7 @@
 # faster cold starts on Azure Container Apps / App Service.
 # ---------------------------------------------------------------------------
 
-FROM node:22-slim AS base
+FROM node:24-slim AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable
@@ -15,11 +15,16 @@ WORKDIR /app
 
 # ---- Builder: install all deps, generate client, compile ------------------
 FROM base AS builder
-COPY package.json pnpm-lock.yaml* ./
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
 RUN pnpm install --frozen-lockfile
 COPY . .
-# Generate the Prisma client if the schema is present (skip for no-Prisma setups).
-RUN if [ -f prisma/schema.prisma ]; then pnpm prisma:generate; fi
+# `prisma generate` only reads the schema (no DB connection opened), but
+# `prisma.config.ts` still requires `DATABASE_URL` to be resolvable — a
+# placeholder is enough here; override with `--build-arg DATABASE_URL=...`
+# if a real one is ever needed at build time.
+ARG DATABASE_URL="sqlserver://localhost:1433;database=build;user=sa;password=x;trustServerCertificate=true"
+ENV DATABASE_URL=${DATABASE_URL}
+RUN pnpm prisma:generate
 RUN pnpm build
 # Strip dev dependencies in place (keeps the generated client).
 RUN pnpm prune --prod

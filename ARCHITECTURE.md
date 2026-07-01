@@ -14,7 +14,7 @@ explains the *why* and the cross-cutting standards. All three must stay in sync.
 | Logging        | **nestjs-pino** (JSON in prod, pretty in dev, correlation ids) |
 | Auth           | Passport JWT — dual strategy (Azure AD JWKS / local HS256) |
 | Observability  | Terminus health probes + Azure Monitor OpenTelemetry      |
-| Runtime        | Node ≥ 22, pnpm                                            |
+| Runtime        | Node ≥ 24 (current Active LTS), pnpm 11                    |
 
 ## Vertical Slice Architecture (VSA)
 

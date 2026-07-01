@@ -13,7 +13,7 @@ cada operación del dominio es un slice autónomo con localidad de referencia to
 - Feature slices: `src/features/<dominio>/<accion>/` — endpoint, lógica, DTOs y tests juntos.
 - Shared building blocks: `libs/*`, imported via the `@app/*` path alias.
 - Environment schema + per-stage files: `env/`, imported via the `@env` alias.
-- Package manager: **pnpm** (Node ≥ 22).
+- Package manager: **pnpm 11** (Node ≥ 24, current Active LTS).
 
 ## Commands
 
@@ -81,6 +81,37 @@ when touching bootstrap, guards, filters, or interceptors.
 - **Mandatory Tooling:** ALWAYS use the `context7` MCP server tools (`resolve-library-id` and `query-docs`) BEFORE generating implementation code for any third-party library, especially for Fastify, Prisma 7, Zod, and Azure SDKs.
 - Do not rely on your base training data for API surfaces. Fetch the latest documentation snippet via Context7 to ensure 2026 compatibility.
 
+### Dependency Freshness Policy
+- **Siempre la última LTS/estable, nunca a ciegas.** Node objetivo = la Active LTS
+  actual (hoy Node 24; revisa el calendario de releases antes de asumirlo).
+  Para cada dependencia, verifica la última versión publicada (`npm view <pkg>
+  version`, o Context7) antes de bumpear — no confíes en el training data para
+  decidir "cuál es la última".
+- **Verifica compatibilidad de peers antes de bumpear un major.** Antes de subir
+  una versión mayor, lee su changelog/migration guide (vía Context7) para
+  Node mínimo requerido, breaking changes de config, y peerDependencies.
+- **Nunca bumpees una dependencia directa por encima de lo que un paquete interno
+  (ej. `@nestjs/platform-fastify`) fija como dependencia exacta** — eso duplica
+  la instalación (dos versiones distintas del mismo paquete conviviendo) y rompe
+  tipos que dependen de identidad nominal (visto con `fastify`: pínalo exacto,
+  sin `^`, igual a lo que `@nestjs/platform-fastify` requiere). Corre `pnpm why
+  <pkg>` para confirmar una sola versión resuelta tras cualquier bump.
+- **Verifica siempre en una copia aislada, nunca en el `node_modules` real del
+  usuario.** Este entorno (sandbox Linux) puede estar montado sobre el
+  `node_modules` real de la máquina del usuario (con binarios nativos de su
+  propio SO); correr `pnpm install` ahí lo sobreescribiría con binarios de otra
+  plataforma. Copia el repo a un directorio temporal, instala y verifica
+  (`typecheck`, `lint`, `test`, `build`) ahí, y solo copia de vuelta los
+  archivos de texto verificados (`package.json`, `pnpm-workspace.yaml`,
+  `pnpm-lock.yaml`, etc.) — nunca el `node_modules` en sí.
+- **pnpm ≥11 no lee `package.json#pnpm`** — toda config de pnpm (`allowBuilds`,
+  `supportedArchitectures`, etc.) vive en `pnpm-workspace.yaml`.
+  `supportedArchitectures` incluye `linux`/`darwin`/`win32` × `x64`/`arm64` para
+  que el lockfile resuelva los binarios nativos opcionales (`unrs-resolver`,
+  motor de Prisma, etc.) de cualquier plataforma donde se corra `pnpm install`
+  — evita el clásico "Cannot find native binding" al clonar en un SO distinto
+  al que generó el lockfile.
+
 ### Git & Pull Request Policy
 - **Autorizado a hacer `git commit` y `git push`** sobre la rama de trabajo actual — nunca directo a `main`.
 - **Nunca te agregues como coautor.** El mensaje de commit no debe incluir un trailer `Co-Authored-By: Claude ...` ni menciones tipo "Generated with Claude" / "🤖". El autor es el usuario; el agente actúa en su nombre.
@@ -116,6 +147,8 @@ when touching bootstrap, guards, filters, or interceptors.
   `{src,libs,test,scripts}/**/*.ts` before every commit.
 - **`.github/workflows/ci.yml`** — typecheck, non-mutating lint, unit + e2e
   tests, build, on every push/PR to `main`.
+- **`pnpm-workspace.yaml`** — pnpm ≥11 settings (`allowBuilds`,
+  `supportedArchitectures`); see Dependency Freshness Policy above.
 
 ## Conventions
 

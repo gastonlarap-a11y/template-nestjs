@@ -22,7 +22,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10.12.1
+          version: 11.9.0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -35,9 +35,13 @@ jobs:
 
       # `@prisma/client`'s generated types are required for tsc/build/tests to
       # resolve model types (e.g. `Prisma.UserWhereInput`) — no live database
-      # needed, `prisma generate` only reads schema.prisma.
+      # connection is opened, but `prisma.config.ts` still requires
+      # `DATABASE_URL` to be resolvable (it mirrors env/.env.<APP_ENV>, which
+      # doesn't exist in CI), so a syntactically-valid placeholder is enough.
       - name: Generate Prisma client
         run: pnpm prisma:generate
+        env:
+          DATABASE_URL: 'sqlserver://localhost:1433;database=ci;user=sa;password=x;trustServerCertificate=true'
 
       - name: Typecheck
         run: pnpm typecheck

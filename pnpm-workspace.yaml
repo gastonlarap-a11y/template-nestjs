@@ -1,0 +1,23 @@
+# pnpm >=11 settings (package.json#pnpm is no longer read since v11).
+supportedArchitectures:
+  os:
+    - current
+    - linux
+    - darwin
+    - win32
+  cpu:
+    - current
+    - x64
+    - arm64
+
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  '@swc/core': true
+  esbuild: true
+  prisma: true
+  protobufjs: true
+  unrs-resolver: true
+  # Transitive dep of swagger-ui-dist (via @nestjs/swagger): telemetry-only
+  # postinstall script, not required for the app to build or run.
+  '@scarf/scarf': false

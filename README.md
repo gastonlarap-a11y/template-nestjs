@@ -14,7 +14,7 @@ JWT auth (Azure AD / local mock), Swagger, and an interactive initializer.
 | Area            | Choice                                                                 |
 | --------------- | ---------------------------------------------------------------------- |
 | Framework       | NestJS 11 on **Fastify** (higher throughput, lower memory than Express) |
-| Language        | TypeScript (full **strict** mode) on Node 22                           |
+| Language        | TypeScript (full **strict** mode) on Node 24 (Active LTS)              |
 | Validation      | **Zod v4** for env **and** DTOs via `nestjs-zod` (`z.toJSONSchema` → OpenAPI) |
 | ORM             | **Prisma 7** — pure-TypeScript client (no Rust engine) + driver adapters |
 | Logging         | `nestjs-pino` — JSON in prod, pretty in dev, correlation ids          |
