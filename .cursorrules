@@ -1,45 +1,67 @@
-# Cursor Rules — NestJS Clean Architecture Template
+# Cursor Rules — NestJS Vertical Slice Architecture Template
 
 You are working in an enterprise NestJS 11 + Fastify + Prisma 7 + Zod microservice
-that follows Clean Architecture. Enforce the boundaries below in every change.
-See ARCHITECTURE.md and CLAUDE.md for full context.
+that follows **Vertical Slice Architecture (VSA)** — not Clean Architecture, not
+layered/DDD. Enforce the boundaries below in every change. See ARCHITECTURE.md
+and CLAUDE.md for full context; those two files and this one must stay in sync.
 
 ## Architecture boundaries (must enforce)
 
-- Clean Architecture with vertical slices under `src/modules/<feature>/`:
-  - `domain/`        — pure TypeScript: entities + ports (abstract classes). NO
-                       framework imports (no NestJS, Prisma, Fastify).
-  - `application/`   — use-cases + Zod DTOs. Depends ONLY on domain ports.
-  - `infrastructure/`— adapters implementing ports (e.g. Prisma repositories).
-  - `*.controller.ts`— HTTP transport only; delegates to use-cases.
-- Dependency direction is inward only, and `src → libs` only (never `libs → src`).
-- Shared building blocks live in `libs/*` and are imported via the `@app/*` alias.
-  The environment schema is imported via `@env/env.schema`. No deep relative
-  imports across libs.
+- Each domain action lives in its own folder: `src/features/<dominio>/<accion>/`
+  (e.g. `src/features/usuarios/crear-usuario/`). Inside that folder, and only
+  that folder: `<accion>.handler.ts` (controller + logic), `<accion>.dto.ts`
+  (Zod DTOs), `<accion>.spec.ts` (unit test). No subfolders inside a slice.
+- There is **no** `domain/`, `application/`, or `infrastructure/` layer inside
+  `src/features/*`. Do not create repositories, ports, use-case classes, or
+  entity classes as an indirection between the handler and Prisma.
+- `PrismaService` (`@app/database`) is injected **directly** into the handler's
+  constructor. Query the Prisma client inline in the handler method.
+- Dependency direction is `src → libs` only, never `libs → src`. Shared
+  cross-cutting code lives in `libs/*`, imported via the `@app/*` alias (e.g.
+  `@app/common`, `@app/auth`, `@app/config`, `@app/database`). The env schema
+  is imported via `@env/env.schema`. No deep relative imports across libs.
+- One `<Dominio>Module` per domain (e.g. `UsuariosModule`) registers every
+  slice handler in that domain as a Nest `controller`.
 
 ## Hard requirements
 
 - HTTP: Fastify only (`@nestjs/platform-fastify`). Never add Express APIs,
   Express-only middleware, or `@nestjs/platform-express`.
 - Validation: Zod v4 via `createZodDto` (`nestjs-zod`) for ALL DTOs; the global
-  `ZodValidationPipe` validates them. Never introduce `class-validator`/`class-transformer`.
+  `ZodValidationPipe` (registered as `APP_PIPE` in `app.module.ts`) validates
+  them. Never introduce `class-validator`/`class-transformer`.
 - Config/env: no root `.env`. Files live in `env/.env.<APP_ENV>` (local|dev|qa|prod,
   default local). Add new variables to `env/env.schema.ts` AND `env/.env.example`.
-  Read config only through the typed `AppConfigService`; never `process.env` in app code.
-- Errors: RFC 7807 Problem Details, produced centrally by
-  `libs/common/filters/all-exceptions.filter.ts` (`application/problem+json` with
-  `type/title/status/detail/instance` + `code`/`errors`/`correlationId`/`timestamp`).
-  Throw `DomainException` subclasses; never hand-build error response bodies.
-- Success responses: the global `TransformInterceptor` wraps everything as
-  `{ data, meta }`. Paginated results return `{ items, meta }` and are hoisted.
-  Opt out only with `@SkipResponseEnvelope()`.
-- Auth: dual-strategy JWT chosen at boot via `USE_LOCAL_MOCK_AUTH` (Azure AD JWKS
-  RS256 vs local HS256). Guards are global; use `@Public()` / `@Roles()` per route.
+  Read config only through the typed `AppConfigService`; never `process.env` in
+  app code.
+- Errors: throw NestJS's **native** exceptions directly from the handler
+  (`NotFoundException`, `ConflictException`, `BadRequestException`, etc.). Do
+  NOT create `DomainException` subclasses or hand-build error response bodies.
+  The global `AllExceptionsFilter` (`libs/common/filters/all-exceptions.filter.ts`)
+  catches everything and produces the `ApiEnvelope` error shape automatically.
+- Success responses: the handler returns `ApiEnvelope<T>` **directly** —
+  `{ success: true, data, message, meta: { timestamp } }`. There is no
+  `TransformInterceptor` and no `@SkipResponseEnvelope()` decorator — both were
+  removed. For paginated lists, build `meta` with `buildPaginationMeta` from
+  `@app/common` and spread it alongside `timestamp`.
+- Auth: dual-strategy JWT chosen at boot via `USE_LOCAL_MOCK_AUTH` (Azure AD
+  JWKS RS256 vs local HS256, see `libs/auth/jwt.strategy.ts`). `JwtAuthGuard`
+  and `RolesGuard` are registered globally via `APP_GUARD` in
+  `libs/auth/auth.module.ts`. Use `@Public()` to bypass auth on a route and
+  `@Roles(...)` to restrict it; inject the caller with `@CurrentUser()`.
 
 ## Conventions
 
-- Naming: `*.entity.ts`, `*.repository.ts` (port) / `<tech>-*.repository.ts`
-  (adapter), `*.use-case.ts`, `*.dto.ts`, `*.controller.ts`, `*.guard.ts`.
-- TypeScript strict mode is mandatory — do not loosen `tsconfig.json`.
-- Co-locate `*.spec.ts` unit tests; e2e tests live in `test/`.
-- After changes, ensure `pnpm typecheck` and `pnpm test` pass.
+- Files per slice: `<accion>.handler.ts`, `<accion>.dto.ts`, `<accion>.spec.ts`
+  — action names follow the existing `usuarios` domain convention
+  (`crear-usuario`, `listar-usuarios`, `obtener-usuario`, `actualizar-usuario`,
+  `eliminar-usuario`) unless the project's domain language differs.
+- Reuse `PaginationQuerySchema` / `PaginationQueryDto` / `buildPaginationMeta`
+  from `@app/common` for any paginated list endpoint instead of hand-rolling one.
+- TypeScript is fully strict — never loosen `tsconfig.json` compiler options.
+- Co-locate unit tests as `*.spec.ts` inside the slice folder, mocking
+  `PrismaService` with `jest.mock('@app/database', ...)`; e2e tests live in
+  `test/`.
+- Prefer `pnpm new:slice <dominio> <accion>` to scaffold a new slice's three
+  files instead of copy-pasting an existing one by hand.
+- After changes, ensure `pnpm typecheck`, `pnpm lint`, and `pnpm test` pass.

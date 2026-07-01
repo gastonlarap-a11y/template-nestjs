@@ -57,10 +57,10 @@ describe('Application (e2e)', () => {
     expect(res.json()).toMatchObject({ status: 'ok' });
   });
 
-  it('GET /users → 401 without a bearer token', async () => {
+  it('GET /usuarios → 401 without a bearer token', async () => {
     // The global `api` prefix is applied in `main.ts` (not in this bare test
-    // app), so the route lives at `/users` here.
-    const res = await app.inject({ method: 'GET', url: '/users' });
+    // app), so the route lives at `/usuarios` here.
+    const res = await app.inject({ method: 'GET', url: '/usuarios' });
     expect(res.statusCode).toBe(401);
   });
 });

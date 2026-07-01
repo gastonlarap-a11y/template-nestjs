@@ -17,9 +17,9 @@ import { PrismaService } from '@app/database';
  *  - `GET /health/ready`  — **readiness**: dependencies (the database) are
  *    reachable. Used to gate traffic during rollouts.
  *
- * Both are `@Public()` so orchestrators can probe without credentials, and
- * `@SkipResponseEnvelope()` so the raw Terminus `{ status, info, details }`
- * contract is preserved (orchestrators parse it directly).
+ * Both are `@Public()` so orchestrators can probe without credentials. They
+ * intentionally return Terminus's raw `{ status, info, details }` shape
+ * as-is (not wrapped in `ApiEnvelope`) so orchestrators can parse it directly.
  */
 @ApiTags('Health')
 @Controller('health')

@@ -2,7 +2,7 @@
 
 A reference for humans and AI agents. The enforceable rules are summarised in
 [CLAUDE.md](./CLAUDE.md) and [.cursorrules](./.cursorrules); this document
-explains the *why* and the cross-cutting standards.
+explains the *why* and the cross-cutting standards. All three must stay in sync.
 
 ## Stack
 
@@ -10,40 +10,46 @@ explains the *why* and the cross-cutting standards.
 | -------------- | --------------------------------------------------------- |
 | Framework      | NestJS 11 on **Fastify** (`@nestjs/platform-fastify`)     |
 | Validation     | **Zod v4** (`nestjs-zod`) — env + DTOs                     |
-| ORM            | **Prisma 7** (pure-TS client) + `@prisma/adapter-mssql`   |
+| ORM            | **Prisma 7** (pure-TS client) + `@prisma/adapter-mssql` / `@prisma/adapter-pg` |
 | Logging        | **nestjs-pino** (JSON in prod, pretty in dev, correlation ids) |
 | Auth           | Passport JWT — dual strategy (Azure AD JWKS / local HS256) |
 | Observability  | Terminus health probes + Azure Monitor OpenTelemetry      |
 | Runtime        | Node ≥ 22, pnpm                                            |
 
-## Layers (Clean Architecture)
+## Vertical Slice Architecture (VSA)
 
-Feature code is organised as **vertical slices** under `src/modules/<feature>/`.
-Cross-cutting infrastructure lives in `libs/*` (imported via `@app/*`). The
-dependency rule is strict and one-directional — outer layers depend on inner
-layers, never the reverse, and `src → libs` only.
+Feature code is organised as **vertical slices**, one per domain action, under
+`src/features/<dominio>/<accion>/`. There are no `domain/`, `application/`, or
+`infrastructure/` layers, no repository/port abstraction, and no use-case
+classes — each slice is a small, self-contained controller that talks to
+Prisma directly. Cross-cutting infrastructure lives in `libs/*` (imported via
+`@app/*`). The dependency rule is `src → libs` only, never the reverse.
 
 ```
-src/modules/users/
-├── domain/                 # Innermost. Pure TypeScript, zero framework deps.
-│   ├── user.entity.ts      #   Entity / aggregate with business invariants.
-│   └── user.repository.ts  #   Port: abstract class used as a DI token.
-├── application/            # Use-cases orchestrate the domain via ports.
-│   ├── dto/                #   Zod DTOs (createZodDto) — request/response shapes.
-│   └── use-cases/          #   One class per command/query (single responsibility).
-├── infrastructure/         # Adapters that implement domain ports.
-│   ├── prisma-user.repository.ts     # Prisma-backed adapter.
-│   └── in-memory-user.repository.ts  # Fake for tests.
-├── users.controller.ts     # Presentation: HTTP only; delegates to use-cases.
-└── users.module.ts         # Wires port → adapter for the slice.
+src/features/usuarios/
+├── usuarios.module.ts               # Registers every slice handler as a controller.
+├── crear-usuario/
+│   ├── crear-usuario.handler.ts     # Controller + business logic + Prisma calls.
+│   ├── crear-usuario.dto.ts         # Zod request/response schemas (createZodDto).
+│   └── crear-usuario.spec.ts        # Unit test, PrismaService mocked.
+├── listar-usuarios/                 # Same three-file shape, one per action:
+├── obtener-usuario/                 #   handler + dto + spec, nothing else.
+├── actualizar-usuario/
+└── eliminar-usuario/
 ```
 
-- **Domain** holds business rules; it must not import NestJS, Prisma, or Fastify.
-- **Application** depends only on domain **ports** (abstract classes), never on a
-  concrete adapter — this keeps it testable with in-memory fakes.
-- **Infrastructure** is where frameworks and I/O live; it implements the ports.
-- **Presentation** (controllers) validates input (Zod), enforces RBAC, and maps
-  to/from use-cases. No business logic.
+- **Locality of behaviour**: everything a slice needs (endpoint, validation,
+  business rules, DB access) lives in one folder, so a change to "create user"
+  never requires touching files scattered across layers.
+- **`PrismaService` is injected directly** into the handler's constructor
+  (rule: no repositories, no ports, no DI indirection between the handler and
+  the database). This is a deliberate trade-off: it optimises for the common
+  case (CRUD-shaped features) over swappable persistence, which this template
+  does not need.
+- **Domain modules** (`UsuariosModule`) are the only grouping above the slice:
+  one module per domain, wiring every action's handler as a `controller`.
+- New slice? Run `pnpm new:slice <dominio> <accion>` to scaffold the three
+  files with the correct boilerplate instead of copy-pasting `usuarios`.
 
 `libs/` modules (`@app/config`, `@app/common`, `@app/auth`, `@app/database`,
 `@app/logging`, `@app/observability`) are framework-aware shared kernels wired
@@ -76,57 +82,61 @@ env/
   (`@app/config`) — never `process.env` in application code.
 - Adding a variable = update `env/env.schema.ts` **and** `env/.env.example`.
 
-## Error handling — RFC 7807 Problem Details
+## Error handling — native NestJS exceptions + uniform envelope
 
-All exceptions are caught by `libs/common/filters/all-exceptions.filter.ts` and
-returned as `application/problem+json` following
-[RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807). Core members are
-`type`, `title`, `status`, `detail`, `instance`; spec-sanctioned extension
-members add `code`, `errors`, `correlationId`, and `timestamp`. The filter logs
-the error (with stack) through the structured pino logger before responding —
-`error` for ≥500, `warn` for 4xx.
+Handlers throw NestJS's **native** exceptions directly — `NotFoundException`,
+`ConflictException`, `BadRequestException`, etc. There are no `DomainException`
+subclasses and no hand-built error bodies. The global
+`libs/common/filters/all-exceptions.filter.ts` (`AllExceptionsFilter`) catches
+everything and normalises it into the same `ApiEnvelope` shape used by success
+responses, logging through the structured pino logger before responding
+(`error` for ≥500, `warn` for 4xx).
 
 Mapping:
 
-| Source                              | Status      | `code`              |
-| ----------------------------------- | ----------- | ------------------- |
-| `ZodValidationException`            | 400         | `VALIDATION_ERROR` (+ `errors[]`) |
-| `DomainException` subclasses        | its status  | e.g. `USER_NOT_FOUND` |
-| `Prisma.PrismaClientKnownRequestError` | mapped (P2025→404, P2002/P2003→409, …) | `PRISMA_<code>` |
-| other `HttpException`               | its status  | status name         |
-| anything else                       | 500         | `INTERNAL_SERVER_ERROR` (no internals leaked) |
+| Source                                    | Status                                                   | Notes |
+| ------------------------------------------ | --------------------------------------------------------- | ----- |
+| `ZodValidationException`                   | 400                                                       | `message: 'Error de validación'`, `errors[]` with `{ path, message, code }` |
+| `Prisma.PrismaClientKnownRequestError`      | mapped (P2025→404, P2002/P2003→409, P2000→400, else 400)  | Message never leaks raw SQL |
+| any `HttpException` (thrown by a handler)   | its own status                                            | e.g. `NotFoundException`, `ConflictException` |
+| anything else (programmer error)            | 500                                                       | `'Ocurrió un error inesperado.'`, no internals leaked |
 
 Example (validation failure):
 
 ```json
 {
-  "type": "about:blank",
-  "title": "Bad Request",
-  "status": 400,
-  "detail": "Request validation failed.",
-  "instance": "/api/users",
-  "code": "VALIDATION_ERROR",
-  "errors": [{ "path": "email", "message": "Invalid email", "code": "invalid_string" }],
-  "correlationId": "req-abc123",
-  "timestamp": "2026-06-20T10:30:00.000Z"
+  "success": false,
+  "data": null,
+  "message": "Error de validación",
+  "meta": { "timestamp": "2026-06-30T10:30:00.000Z" },
+  "errors": [{ "path": "email", "message": "Invalid email", "code": "invalid_string" }]
 }
 ```
 
-Domain/application code should **throw** `DomainException` subclasses
-(`EntityNotFoundException`, `EntityConflictException`, `BusinessRuleException`)
-rather than build HTTP responses.
+## Success responses — the `ApiEnvelope<T>` contract
 
-## Success responses — `{ data, meta }` envelope
+There is **no `TransformInterceptor`** and **no `@SkipResponseEnvelope()`**
+decorator — both were removed. Every handler builds and returns its own
+`ApiEnvelope<T>` directly (`libs/common/interfaces/api-envelope.interface.ts`):
 
-The global `TransformInterceptor` (`libs/common/interceptors/`) wraps every
-successful response:
+```ts
+interface ApiEnvelope<T = unknown> {
+  success: boolean;
+  data: T | null;
+  message: string;
+  meta: { timestamp: string };
+  errors?: EnvelopeError[];
+}
+```
 
-- Single resource → `{ "data": <payload> }`.
-- Collection/paginated → use-cases return `{ items, meta }` (built with
-  `buildPaginationMeta` from `@app/common`); the interceptor hoists this to
-  `{ "data": [...], "meta": { total, page, limit, totalPages, hasNextPage, hasPreviousPage } }`.
-- Routes with a fixed external contract opt out via `@SkipResponseEnvelope()`
-  (e.g. Terminus health probes, which must keep `{ status, info, details }`).
+- Single resource → `{ success: true, data: <payload>, message, meta: { timestamp } }`.
+- Paginated list → build `meta` with `buildPaginationMeta(total, { page, limit })`
+  from `@app/common` and spread it alongside `timestamp`:
+  `meta: { ...paginationMeta, timestamp }`. Reuse `PaginationQuerySchema` /
+  `PaginationQueryDto` for the query DTO instead of hand-rolling one.
+- Routes with a fixed external contract (e.g. Terminus health probes, which
+  must keep Terminus's own `{ status, info, details }` shape) simply return
+  that shape as-is — there is no opt-out decorator to reach for.
 
 ## Dual-strategy authentication
 
@@ -140,15 +150,38 @@ A single Passport JWT strategy (`libs/auth/jwt.strategy.ts`) selects its mode at
   `LOCAL_JWT_SECRET`. Generate a token with `pnpm auth:token`. The payload mirrors
   the Entra ID claim shape so RBAC works offline.
 
-Claims are mapped to a provider-agnostic `AuthenticatedUser`. Guards are global:
+Claims are mapped to a provider-agnostic `AuthenticatedUser`. `JwtAuthGuard` and
+`RolesGuard` are registered globally via `APP_GUARD` in `libs/auth/auth.module.ts`:
 `JwtAuthGuard` enforces authentication (bypass with `@Public()`), `RolesGuard`
 enforces `@Roles(...)` (any-of match). Inject the principal with `@CurrentUser()`.
 
 ## Testing
 
-- Unit tests are co-located as `*.spec.ts`; use-cases are tested against
-  in-memory fake repositories (no I/O).
-- E2E smoke tests live in `test/*.e2e-spec.ts`, booting the full Fastify graph
-  with `PrismaService` stubbed. Health probes return their raw shape (excluded
-  from the envelope); feature routes are guarded (401 without a token).
+- Unit tests are co-located as `*.spec.ts` inside each slice folder. Mock
+  `PrismaService` with `jest.mock('@app/database', () => ({ PrismaService: class {} }))`
+  plus a `providers: [{ provide: PrismaService, useValue: mockPrisma }]` override
+  — no I/O, no test database.
+- E2E smoke tests live in `test/*.e2e-spec.ts`, booting the full Fastify graph.
+  Health probes return their raw Terminus shape; feature routes are guarded
+  (401 without a token).
 - Run `pnpm typecheck`, `pnpm test`, and `pnpm test:e2e` before merging.
+
+## Extending the template
+
+- **New CRUD/API endpoint**: `pnpm new:slice <dominio> <accion>` scaffolds
+  `handler.ts` + `dto.ts` + `spec.ts`; register the handler in the domain's
+  `<Dominio>Module` `controllers` array (or let the generator do it if the
+  module already exists).
+- **WebSockets** (real-time features — chat, notifications, live updates): add
+  a `<accion>.gateway.ts` inside the relevant slice folder using
+  `@nestjs/websockets` + `@nestjs/platform-socket.io`. Reuse the existing JWT
+  strategy for handshake auth (validate the token in a `WsException`-throwing
+  guard) instead of inventing a parallel auth mechanism. Not included by
+  default to avoid an unused dependency — add it via `pnpm run init`'s
+  "additional capabilities" prompt or manually when the first real-time
+  feature is needed.
+- **Event-driven microservice** (async jobs, pub/sub, queue consumers): add
+  `@nestjs/microservices` with a transporter (Redis, Azure Service Bus, etc.)
+  as a hybrid app (`app.connectMicroservice(...)`) alongside the existing HTTP
+  server, keeping the handler/dto/spec slice shape for message handlers too.
+  Same rule as WebSockets — opt in via `pnpm run init` or when actually needed.

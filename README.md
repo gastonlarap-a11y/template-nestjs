@@ -1,7 +1,7 @@
 # NestJS Enterprise Template
 
 Enterprise-grade, cloud-native (**Azure-ready**) NestJS microservice template for 2026.
-Clean Architecture + SOLID, Fastify, Prisma 7, Zod v4, structured logging, dual-mode
+Vertical Slice Architecture, Fastify, Prisma 7, Zod v4, structured logging, dual-mode
 JWT auth (Azure AD / local mock), Swagger, and an interactive initializer.
 
 > **First time here?** Run `pnpm install && pnpm run init` and answer the prompts — the
@@ -27,32 +27,36 @@ JWT auth (Azure AD / local mock), Swagger, and an interactive initializer.
 ## 🏗️ Architecture
 
 Shared, framework-light building blocks live in `libs/` and are imported through
-`@app/*` path aliases. Feature modules in `src/modules/` follow Clean Architecture.
+`@app/*` path aliases. Feature code in `src/features/` follows **Vertical Slice
+Architecture (VSA)** — no `domain/application/infrastructure` layers, no
+repositories: each action is a self-contained `handler + dto + spec` that talks
+to Prisma directly. See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full rationale.
 
 ```
 src/
-  instrumentation? (in libs)        # OTel init, imported first in main.ts
   main.ts                           # Fastify bootstrap, Swagger, global pipe/filter
   app.module.ts                     # composition root
-  modules/users/                    # example vertical slice
-    domain/        user.entity.ts · user.repository.ts (port)
-    application/   dto/ (Zod) · use-cases/
-    infrastructure/ prisma-user.repository.ts (adapter)
-    users.controller.ts · users.module.ts
+  features/usuarios/                # example domain (one folder per action)
+    usuarios.module.ts              # registers every action's handler as a controller
+    crear-usuario/       crear-usuario.handler.ts · .dto.ts · .spec.ts
+    listar-usuarios/     listar-usuarios.handler.ts · .dto.ts · .spec.ts
+    obtener-usuario/     obtener-usuario.handler.ts · .dto.ts · .spec.ts
+    actualizar-usuario/  actualizar-usuario.handler.ts · .dto.ts · .spec.ts
+    eliminar-usuario/    eliminar-usuario.handler.ts · .dto.ts · .spec.ts
 libs/
   config/         @app/config        # Zod env schema + typed ConfigService
-  common/         @app/common        # error filter, interceptors, RBAC decorators, pagination
+  common/         @app/common        # error filter, RBAC decorators, ApiEnvelope, pagination
   auth/           @app/auth          # dual JWT strategy + global guards
   database/       @app/database      # Prisma service/module
   logging/        @app/logging       # pino config
   observability/  @app/observability # health probes + Azure Monitor instrumentation
 prisma/           schema.prisma · seed.ts
-scripts/          init.ts · generate-mock-token.ts
+scripts/          init.ts · generate-mock-token.ts · new-slice generator (Plop)
 ```
 
-**Dependency rule:** `app → libs`, never the reverse. Use cases depend on the
-abstract `UserRepository` (port); Prisma is bound as the adapter in `users.module.ts`,
-so swapping the database — or faking it in tests — touches exactly one provider.
+**Dependency rule:** `src → libs`, never the reverse. `PrismaService` is injected
+directly into each handler — no port/adapter indirection to swap. Need a new
+endpoint? Run `pnpm new:slice <dominio> <accion>` instead of copy-pasting `usuarios`.
 
 ## 🚀 Bootstrap (run these now)
 
@@ -88,7 +92,7 @@ pnpm run auth:token -- --roles=UserManager   # custom roles
 ```
 
 Copy the token into Swagger's **Authorize** dialog and call the RBAC-protected
-`/api/users` endpoints. The payload mimics an Entra ID token (`sub`, `email`,
+`/api/usuarios` endpoints. The payload mimics an Entra ID token (`sub`, `email`,
 `roles`, `oid`, `tid`), so switching to real Azure AD later is a config change only:
 set `USE_LOCAL_MOCK_AUTH=false` and provide `AZURE_AD_TENANT_ID` + `AZURE_AD_AUDIENCE`.
 
@@ -105,12 +109,18 @@ and correlated logs to Azure Monitor. Unset, instrumentation is a no-op.
 | Command                | Purpose                                  |
 | ---------------------- | ---------------------------------------- |
 | `pnpm start:dev`       | Watch mode (tsx, resolves `@app/*`)      |
+| `pnpm new:slice <dominio> <accion>` | Scaffold a new VSA slice (handler+dto+spec) |
 | `pnpm build`           | `nest build` + `tsc-alias` (prod bundle) |
 | `pnpm typecheck`       | `tsc --noEmit` (strict)                  |
+| `pnpm lint`            | ESLint (`--fix`)                         |
 | `pnpm test` / `:e2e`   | Unit / end-to-end tests                  |
 | `pnpm run auth:token`  | Generate a local mock JWT                |
 | `pnpm prisma:studio`   | Browse the database                      |
 | `pnpm docker:up/down`  | Start/stop local infrastructure          |
+
+A pre-commit hook (Husky + lint-staged) runs lint/format automatically, and
+GitHub Actions (`.github/workflows/ci.yml`) runs typecheck/lint/test/build on
+every push and PR.
 
 ## ☁️ Cloud-native notes
 

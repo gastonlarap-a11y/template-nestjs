@@ -80,7 +80,42 @@ when touching bootstrap, guards, filters, or interceptors.
 ### MCP & Documentation Policy
 - **Mandatory Tooling:** ALWAYS use the `context7` MCP server tools (`resolve-library-id` and `query-docs`) BEFORE generating implementation code for any third-party library, especially for Fastify, Prisma 7, Zod, and Azure SDKs.
 - Do not rely on your base training data for API surfaces. Fetch the latest documentation snippet via Context7 to ensure 2026 compatibility.
-- You are authorized to run `git status`, `git diff`, and `git add`. You MUST NEVER run `git commit` or `git push` autonomously. When a task is complete, stage the modified files and instruct the user to execute the commit manually to preserve cryptographic signatures.
+
+### Git & Pull Request Policy
+- **Autorizado a hacer `git commit` y `git push`** sobre la rama de trabajo actual — nunca directo a `main`.
+- **Nunca te agregues como coautor.** El mensaje de commit no debe incluir un trailer `Co-Authored-By: Claude ...` ni menciones tipo "Generated with Claude" / "🤖". El autor es el usuario; el agente actúa en su nombre.
+- **Sincroniza con `main` antes de cada push:**
+  1. `git fetch origin`.
+  2. Verifica que la rama local incluya los últimos commits de `origin/main` (rebase o merge si no); nunca `git push --force` salvo que el usuario lo pida explícitamente.
+  3. Resuelve cualquier conflicto localmente.
+  4. Vuelve a correr `pnpm typecheck` y `pnpm test` tras sincronizar, antes de pushear.
+- **Abre el Pull Request tras el push** con `gh pr create` contra `main` (título + descripción del cambio, sin firmas ni menciones de IA en el cuerpo). Si `gh` no está disponible, indícale al usuario el link para abrirlo manualmente.
+- `.claude/settings.json` + `.claude/hooks/git-safety.sh` son un hook de defensa en profundidad: bloquean commits con atribución a Claude/Anthropic y bloquean `git push` si la rama no está sincronizada con `origin/main`. El agente no debe depender solo del hook — debe seguir estas reglas explícitamente en cada caso.
+
+## Agent tooling (local to this repo)
+
+- **`.mcp.json`** — project-scoped MCP servers, versioned so every agent/session
+  gets them automatically: `context7` (live third-party docs, see policy above),
+  `prisma-local` (official Prisma MCP, local mode — migrate status/dev/reset,
+  studio), `azure` (official Azure MCP Server, started `--read-only` by default;
+  drop the flag locally if you need write access, but never commit that change).
+  All three run via `npx`; no extra install step.
+- **`.claude/settings.json` + `.claude/hooks/git-safety.sh`** — hooks, defense-in-depth
+  for the Git & Pull Request Policy above:
+  - `PreToolUse` on `Bash` blocks any commit whose message attributes authorship
+    to Claude/Anthropic, and blocks `git push` if the branch is not in sync with
+    `origin/main` — the agent should never rely on the hook alone and must still
+    fetch/sync/resolve conflicts itself.
+  - `PostToolUse` on `Edit`/`Write` runs `eslint --fix` on the touched `*.ts`
+    file, keeping generated/edited code lint-clean without waiting for the
+    pre-commit hook.
+- **`.claude/skills/code-review/SKILL.md`** — VSA-aware code review checklist
+  (architecture-boundary rules 1:1 with the "Non-negotiable architectural
+  rules" above). Invoke it when reviewing a diff or PR before commit.
+- **`.husky/pre-commit` + `lint-staged`** — runs `eslint --fix` on staged
+  `{src,libs,test,scripts}/**/*.ts` before every commit.
+- **`.github/workflows/ci.yml`** — typecheck, non-mutating lint, unit + e2e
+  tests, build, on every push/PR to `main`.
 
 ## Conventions
 

@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `@prisma/client`'s generated types are required for tsc/build/tests to
+      # resolve model types (e.g. `Prisma.UserWhereInput`) — no live database
+      # needed, `prisma generate` only reads schema.prisma.
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Non-mutating lint check — `pnpm lint` runs `eslint --fix`, which isn't
+      # appropriate for CI (it would silently pass on issues autofixed away
+      # from an uncommitted working tree). Fail the build on any violation.
+      - name: Lint
+        run: pnpm exec eslint "{src,libs,test,scripts}/**/*.ts" --max-warnings 0
+
+      - name: Unit tests
+        run: pnpm test -- --ci --coverage
+
+      # No live SQL Server needed: PrismaService is stubbed via
+      # `overrideProvider` in test/app.e2e-spec.ts.
+      - name: E2E tests
+        run: pnpm test:e2e -- --ci
+
+      - name: Build
+        run: pnpm build

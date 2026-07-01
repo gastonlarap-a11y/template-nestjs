@@ -41,47 +41,24 @@ export default tseslint.config(
       'prettier/prettier': ['error', { endOfLine: 'auto' }],
     },
   },
-  // Clean Architecture guardrail: enforce the inward-only dependency direction
-  // within feature slices. Scoped to `src/modules/**` so shared `libs/` and test
-  // files are exempt. Layers are folder-mode elements (so intra-layer imports —
-  // e.g. a port importing its entity, a use-case importing its DTO — are the same
-  // element and need no rule); controllers/modules are the two root-level files.
+  // VSA guardrail: enforce CLAUDE.md rule 1 — dependency flow is `src -> libs`,
+  // never `libs -> src`. `default: 'allow'` keeps every other import path
+  // (feature -> feature, feature -> lib, lib -> lib) untouched; this rule only
+  // exists to fail the build if a shared `libs/*` module ever reaches back
+  // into `src/features/*` or `src/*` root files.
   {
-    files: ['src/modules/**/*.ts'],
-    ignores: ['src/modules/**/*.spec.ts'],
+    files: ['libs/**/*.ts', 'src/**/*.ts'],
     plugins: { boundaries },
     settings: {
       'boundaries/elements': [
+        { type: 'lib', pattern: 'libs/*', mode: 'folder', capture: ['lib'] },
         {
-          type: 'domain',
-          pattern: 'src/modules/*/domain',
+          type: 'feature',
+          pattern: 'src/features/*',
           mode: 'folder',
           capture: ['feature'],
         },
-        {
-          type: 'application',
-          pattern: 'src/modules/*/application',
-          mode: 'folder',
-          capture: ['feature'],
-        },
-        {
-          type: 'infrastructure',
-          pattern: 'src/modules/*/infrastructure',
-          mode: 'folder',
-          capture: ['feature'],
-        },
-        {
-          type: 'presentation',
-          pattern: 'src/modules/*/*.controller.ts',
-          mode: 'file',
-          capture: ['feature'],
-        },
-        {
-          type: 'module',
-          pattern: 'src/modules/*/*.module.ts',
-          mode: 'file',
-          capture: ['feature'],
-        },
+        { type: 'app-root', pattern: 'src/*.ts', mode: 'file' },
       ],
       'import/resolver': {
         typescript: { project: './tsconfig.json' },
@@ -91,31 +68,11 @@ export default tseslint.config(
       'boundaries/dependencies': [
         'error',
         {
-          default: 'disallow',
+          default: 'allow',
           rules: [
-            // domain is the innermost layer — depends on no other layer.
-            { from: { type: 'domain' }, disallow: { to: { type: '*' } } },
             {
-              from: { type: 'application' },
-              allow: { to: { type: 'domain' } },
-            },
-            {
-              from: { type: 'infrastructure' },
-              allow: { to: { type: ['domain', 'application'] } },
-            },
-            {
-              from: { type: 'presentation' },
-              allow: { to: { type: ['domain', 'application'] } },
-            },
-            // the module is the composition root — it wires every layer of its
-            // feature together, including its own controller (presentation).
-            {
-              from: { type: 'module' },
-              allow: {
-                to: {
-                  type: ['domain', 'application', 'infrastructure', 'presentation'],
-                },
-              },
+              from: { type: 'lib' },
+              disallow: { to: { type: ['feature', 'app-root'] } },
             },
           ],
         },

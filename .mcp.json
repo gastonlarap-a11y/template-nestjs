@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"],
+      "_comment": "Live docs for NestJS/Prisma/Zod/Fastify/Azure SDKs, mandated by CLAUDE.md before writing code against a third-party library. Works without a key on a rate-limited free tier; set CONTEXT7_API_KEY as an env var (never commit one) if you hit limits."
+    },
+    "prisma-local": {
+      "command": "npx",
+      "args": ["-y", "prisma", "mcp"],
+      "_comment": "Official Prisma MCP (local mode). Wraps migrate-status/migrate-dev/migrate-reset/studio via natural language. No login needed for these; only the Prisma-Postgres-cloud tools (Create-Prisma-Postgres-Database, Prisma-Login) require an account, and this template defaults to self-hosted SQL Server/Postgres, not Prisma's managed Postgres."
+    },
+    "azure": {
+      "command": "npx",
+      "args": ["-y", "@azure/mcp@latest", "server", "start", "--read-only"],
+      "_comment": "Official Azure MCP Server (beta), read-only by default for safety in a shared project file -- remove --read-only locally if you need write access. Authenticates via Azure CLI (az login) / Entra ID; useful for querying App Service, Key Vault, Azure AD app registrations, etc. while wiring up the Azure AD auth mode."
+    }
+  }
+}
