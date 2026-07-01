@@ -17,15 +17,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
+      # No `version:` input here on purpose: it's read from package.json's
+      # `packageManager` field instead. Setting both makes the action fail
+      # with "Multiple versions of pnpm specified" / ERR_PNPM_BAD_PM_VERSION.
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.9.0
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
@@ -52,13 +53,18 @@ jobs:
       - name: Lint
         run: pnpm exec eslint "{src,libs,test,scripts}/**/*.ts" --max-warnings 0
 
+      # `pnpm <script> -- <args>` on pnpm 11 forwards a literal `--` through to
+      # the underlying command instead of stripping it, which makes jest treat
+      # `--ci`/`--coverage` as positional test-path patterns ("No tests
+      # found"). `pnpm exec jest` sidesteps the script-arg-forwarding step
+      # entirely — confirmed by reproducing both ways in an isolated install.
       - name: Unit tests
-        run: pnpm test -- --ci --coverage
+        run: pnpm exec jest --ci --coverage
 
       # No live SQL Server needed: PrismaService is stubbed via
       # `overrideProvider` in test/app.e2e-spec.ts.
       - name: E2E tests
-        run: pnpm test:e2e -- --ci
+        run: pnpm exec jest --config ./test/jest-e2e.json --ci
 
       - name: Build
         run: pnpm build
